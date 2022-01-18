@@ -1,0 +1,443 @@
+**************************************************
+
+apiResorceを用いたAPIの作成
+APIのテストコードの記述
+postmanでAPIの動作確認
+テストコードとAPIで使用するデータベースを分ける
+
+----------------------------------------
+データベース名
+exercise
+
+テスト用データベース名
+exercise_test
+
+コントローラー名
+ExerciseController
+
+モデル名
+Exercise
+
+マイグレーションファイル名
+create_exercises_table
+
+
+**************************************************
+準備
+
+----------------------------------------
+プロジェクト作成
+composer create-project laravel/laravel laravelAPItestpj --prefer-dist
+
+--------------------
+データベース作成
+mysql -u root -p
+CREATE DATABASE exercise;
+
+
+データベース登録
+.env
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=restapipj
+DB_USERNAME=root
+DB_PASSWORD=
+
+--------------------
+マイグレーションファイル
+
+php artisan make:migration create_exercises_table
+
+$table->id();
+$table->string('name');
+$table->string('email');
+$table->string('profile');
+$table->timestamp('created_at')->useCurrent()->nullable();
+$table->timestamp('updated_at')->useCurrent()->nullable();
+
+--------------------
+実行
+php artisan migrate
+
+----------------------------------------
+モデル
+--------------------
+作成
+php artisan make:model Exercise
+
+
+protected $guarded = array('id');
+public static $rules = array(
+  'name' => 'required',
+  'email' => 'required|email|unique',
+  'profile' => 'required'
+);
+
+----------------------------------------
+シード
+--------------------
+作成
+php artisan make:seeder ExerciseTableSeeder
+
+--------------------
+シーダーファイル編集
+use App\Models\Exercise;
+
+$param = [
+  'name'    => 'testname1',
+  'email'   => 'test1@test',
+  'profile' => 'I am test1',
+  ];
+$rest = new Exercise;
+$rest->fill($param)->save();
+
+--------------------
+シーダーの登録
+database/seeders/DatabaseSeeder.php修正
+
+--------------------
+実行
+php artisan db:seed
+
+----------------------------------------
+コントローラー作成
+
+php artisan make:controller ExerciseController --api --model=Exercise
+
+--------------------
+APIリソースルート
+
+use App\Http\Controllers\ExerciseController;
+Route::apiResource('/v1/exercise', ExerciseController::class);
+
+--------------------
+アクションメソッド記述
+テスト問題ページ参照
+
+----------------------------------------
+
+
+**************************************************
+テスト作成
+
+--------------------
+tests/Feature/ExampleTest.php
+tests/Unit/ExampleTest.php
+削除
+----------------------------------------
+Exercise
+
+テストファイル作成
+php artisan make:test ExerciseControllerTest
+
+ファクトリ作成
+php artisan make:factory ExerciseFactory --model=Exercise
+
+--------------------
+ファクトリ編集
+use App\Models\Exercise;
+use Illuminate\Support\Str;
+
+public function definition()
+{
+  return [
+    'name'    => $this->faker->name,
+    'email'   => $this->faker->email,
+    'profile' => Str::random(10),
+  ];
+}
+--------------------
+テスト用データベースexercise_test用意
+
+config/database.php
+'mysql_test' => [
+            'driver' => 'mysql',
+            'url' => env('DATABASE_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'database' => 'exercise_test',
+            'username' => 'root',
+            'password' => '',
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+],
+
+テスト用データベースexercise_test作成
+CREATE DATABASE exercise_test;
+
+テストデータベースにテーブル作成
+php artisan migrate:fresh --database=mysql_test
+
+----------------------------------------
+phpunit.xml編集
+
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">./tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory suffix="Test.php">./tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">./app</directory>
+        </include>
+    </coverage>
+    <php>
+        <server name="APP_ENV" value="testing"/>
+        <server name="BCRYPT_ROUNDS" value="4"/>
+        <server name="CACHE_DRIVER" value="array"/>
+        <server name="DB_CONNECTION" value="mysql_test"/>
+        <server name="MAIL_MAILER" value="array"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <server name="SESSION_DRIVER" value="array"/>
+        <server name="TELESCOPE_ENABLED" value="false"/>
+    </php>
+</phpunit>
+
+--------------------
+.envファイル編集
+DB_DATABASE＝exercise_test
+
+**************************************************
+テスト 実行
+
+----------------------------------------
+index
+
+php artisan serve
+メソッド名：GET
+リクエストURL：http://localhost:8000/api/v1/exercise
+->
+200 OK
+
+--------------------
+テストコード
+tests/Feature/ExerciseControllerTest.php
+
+use App\Models\Exercise;
+class RestControllerTest extends TestCase
+{
+    use RefreshDatabase;
+    /**
+     * A basic feature test example.
+     *
+     * @return void
+     */
+    public function test_index_exercise()
+    {
+        $item = Rest::factory()->create();
+        $response = $this->get('/api/v1/exercise');
+        $response->assertStatus(200);
+        $response->assertJsonFragment([
+            'name' => $item->name,
+            'email' => $item->email,
+            'profile' => $item->profile,
+        ]);
+    }
+}
+
+vendor\bin\phpunit
+->
+PHPUnit 9.5.11 by Sebastian Bergmann and contributors.
+.                                                                   1 / 1 (100%)
+Time: 00:04.201, Memory: 28.00 MB
+OK (1 test, 4 assertions)
+
+
+----------------------------------------
+store
+
+メソッド名：POST
+リクエストURL：http://localhost:8000/api/v1/exercise
+Body形式：raw
+Body形式プルダウン：JSON
+Body中身：
+{
+  "name":"testname",
+  "email":"test@test.test",
+  "profile":"I am test"
+}
+
+->
+201 Created
+{
+    "data": {
+        "name": "testname",
+        "email": "test@test.test",
+        "profile": "I am test",
+        "updated_at": "2022-01-18T09:02:25.000000Z",
+        "created_at": "2022-01-18T09:02:25.000000Z",
+        "id": 2
+    }
+}
+
+--------------------
+テストコード
+public function test_store_exercise()
+  {
+    $data = [
+      'name'    => 'testname',
+      'email'   => 'test@test.test',
+      'profile' => 'I am test',
+    ];
+        $response = $this->post('/api/v1/exercise', $data);
+        $response->assertStatus(201);
+        $response->assertJsonFragment($data);
+        $this->assertDatabaseHas('exercises', $data);
+    }
+
+vendor\bin\phpunit
+->
+PHPUnit 9.5.11 by Sebastian Bergmann and contributors.
+
+..                                                                  2 / 2 (100%)
+
+Time: 00:05.012, Memory: 28.00 MB
+
+OK (2 tests, 9 assertions)
+
+----------------------------------------
+show
+
+php artisan serve
+メソッド名：GET
+リクエストURL：http://localhost:8000/api/v1/exercise/3
+Body形式：raw
+Body形式プルダウン：JSON
+Body中身：
+{
+  "name":"testname",
+  "email":"test@test.test",
+  "profile":"I am test"
+}
+->
+200 OK
+{
+    "data": [
+        {
+            "id": 3,
+            "name": "testname",
+            "email": "test@test.test",
+            "profile": "I am test",
+            "created_at": "2022-01-18T09:10:33.000000Z",
+            "updated_at": "2022-01-18T09:10:33.000000Z"
+        }
+    ]
+}
+
+--------------------
+テストコード
+ public function test_show_exercise()
+    {
+        $item = Exercise::factory()->create();
+        $response = $this->get('/api/v1/exercise/' . $item->id);
+        $response->assertStatus(200);
+        $response->assertJsonFragment([
+            'name' => $item->name,
+            'email' => $item->email,
+            'profile' => $item->profile,
+        ]);
+    }
+vendor\bin\phpunit
+->
+PHPUnit 9.5.11 by Sebastian Bergmann and contributors.
+
+...                                                                 3 / 3 (100%)
+
+Time: 00:04.150, Memory: 28.00 MB
+
+OK (3 tests, 13 assertions)
+
+----------------------------------------
+update
+
+メソッド名：PUT
+リクエストURL：http://localhost:8000/api/v1/exercise/4
+Body形式：raw
+Body形式プルダウン：JSON
+Body中身：
+{
+  "name":"testname",
+  "email":"test@test.test",
+  "profile":"I am test"
+}
+
+->
+200 OK
+
+--------------------
+テストコード
+
+public function test_update_exercise()
+    {
+        $item = Rest::factory()->create();
+        $data = [
+          'name'    => 'testupdatename',
+          'email'   => 'testupdate@test.test',
+          'profile' => 'I am testupdate',
+        ];
+        $response = $this->put('/api/v1/exercise/' . $item->id, $data);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('exercises', $data);
+    }
+
+vendor\bin\phpunit
+->
+PHPUnit 9.5.11 by Sebastian Bergmann and contributors.
+
+....                                                                4 / 4 (100%)
+
+Time: 00:05.331, Memory: 30.00 MB
+
+OK (4 tests, 15 assertions)
+
+----------------------------------------
+destroy
+
+メソッド名：DELETE
+リクエストURL：http://localhost:8000/api/v1/exercise/5
+
+->
+200 OK
+{
+    "message": "Deleted successfully"
+}
+
+--------------------
+テストコード
+
+    public function test_destroy_exercise()
+    {
+        $item = Exercise::factory()->create();
+        $response = $this->delete('/api/v1/exercise/' . $item->id);
+        $response->assertStatus(200);
+        $this->assertDeleted($item);
+    }
+
+vendor\bin\phpunit
+->
+PHPUnit 9.5.11 by Sebastian Bergmann and contributors.
+
+.....                                                               5 / 5 (100%)
+
+Time: 00:05.649, Memory: 30.00 MB
+
+OK (5 tests, 17 assertions)
